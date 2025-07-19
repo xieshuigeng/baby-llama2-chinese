@@ -40,6 +40,8 @@ def sft_process():
             continue
         q_lst.append(q)
         a_lst.append(a)
+    
+    # prompt=instruction + input， answer = output，保存为csv文件。
     df = pd.DataFrame(columns=['prompt', 'answer'])
     df['prompt'] = q_lst
     df['answer'] = a_lst

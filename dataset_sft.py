@@ -34,11 +34,14 @@ class SFTDataset(Dataset):
         if len(answer) > self.answer_max_len:
             answer = answer[:self.answer_max_len-2]
         #
+        # tokenizer后，input_id = [prompt + 'bos' + answer + 'eos']
         input_id=prompt+[self.bos]+answer+[self.eos]
         context_length = input_id.index(self.bos)
         mask_position = context_length - 1
         pad_len = self.max_length - len(input_id)
         input_id = input_id + [self.pad] * pad_len
+        
+        # 这里计算loss_mask，即是 answer 部分 mask 为1， 其他为0.
         if pad_len==0:
             loss_mask = [0]*context_length+[1]*(len(input_id[mask_position+1:])) + [0]*pad_len
         else:
