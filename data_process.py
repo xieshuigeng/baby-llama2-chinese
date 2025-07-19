@@ -5,6 +5,7 @@ from tqdm import tqdm
 from chatglm_tokenizer.tokenization_chatglm import ChatGLMTokenizer
 import pandas as pd
 #from zhconv import convert
+# 这里就是把wikipedia里面的数据completion字段数据tokenizer，然后补上'<eos>'即可。
 def process_wiki_clean():
     with open('./data/wikipedia_cn_20230720/wikipedia-cn-20230720-filtered.json','r',encoding='utf-8') as f:
         data=json.load(f)
@@ -19,6 +20,7 @@ def process_wiki_clean():
     with open('./data/wiki.bin','wb') as f:
         f.write(arr.tobytes())
 
+# 这里是把text字段如上处理。
 def process_medical(data_path,name):
     f=open(data_path,'r',encoding='utf-8')
     doc_ids=[]
@@ -36,6 +38,7 @@ def process_medical(data_path,name):
     with open('./data/medical_{}.bin'.format(name),'wb') as f:
         f.write(arr.tobytes()) 
 
+# 下面是shibing624_medical里面的问答对，将input、output直接拼接，补上'<eos>'即可。
 def sft_to_pretrain():
     doc_ids=[]
 
