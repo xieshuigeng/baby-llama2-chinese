@@ -34,10 +34,10 @@ def get_logger(filename, verbosity=1, name=None):
     return logger
 # -----------------------------------------------------------------------------
 def get_lr(it):
-    # 1) linear warmup for warmup_iters steps
+    # 1) linear warmup for warmup_iters steps, 1000 steps.
     if it < warmup_iters:
         return learning_rate * it / warmup_iters
-    # 2) if it > lr_decay_iters, return min learning rate
+    # 2) if it > lr_decay_iters, return min learning rate, 80000 steps.
     if it > lr_decay_iters:
         return min_lr
     # 3) in between, use cosine decay down to min learning rate
@@ -51,9 +51,13 @@ def train_epoch(epoch):
     for step, (X, Y) in enumerate(train_loader):
         X=X.to(device)
         Y=Y.to(device)
+
+        # call learning_rate function get lr.
         lr = get_lr(epoch*iter_per_epoch+step) if decay_lr else learning_rate
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+        
+        # if DDP，sync gradient
         # and using the GradScaler if data type is float16
         #for micro_step in range(gradient_accumulation_steps):
         if ddp:
@@ -62,14 +66,19 @@ def train_epoch(epoch):
             # I really dislike that this bloats the code and forces us to repeat code
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = 0 == gradient_accumulation_steps - 1
+        
+        # model calculate the logits, and loss.
         with ctx:
             logits = model(X, Y)
             loss = raw_model.last_loss
             loss = loss / gradient_accumulation_steps
+        
+        # gradient scale if trainning in fp16, and clip the gradient.
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
-        #
+
+        # 完成一个完整batch_size后，做裁剪和flush等。
         if (step + 1) % gradient_accumulation_steps == 0:
             # clip the gradient
             if grad_clip != 0.0:
@@ -80,6 +89,7 @@ def train_epoch(epoch):
             scaler.update()
             # flush the gradients as soon as we can, no need for this memory anymore
             optimizer.zero_grad(set_to_none=True)
+        
         #打印日志
         if step % log_interval == 0:
             spend_time=time.time()-start_time
@@ -92,7 +102,8 @@ def train_epoch(epoch):
                         loss.item(), 
                         optimizer.param_groups[-1]['lr'],
                         spend_time / (step+1) * iter_per_epoch // 60 - spend_time // 60))
-        #
+        
+        #save checkpoint
         if step % save_interval == 0:
             if ddp:
                 if torch.distributed.get_rank() == 0:
@@ -164,6 +175,7 @@ def init_model():
         for k, v in list(state_dict.items()):
             if k.startswith(unwanted_prefix):
                 state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+        # load the state from  checkpoint.
         model.load_state_dict(state_dict)
         iter_num = checkpoint["iter_num"]
         best_val_loss = checkpoint["best_val_loss"]
@@ -221,7 +233,7 @@ if __name__=="__main__":
     if not os.path.exists(save_dir): os.makedirs(save_dir)
     logger = get_logger(os.path.join(save_dir,'log.log'))
     # various inits, derived attributes, I/O setup
-   # various inits, derived attributes, I/O setup
+    # various inits, derived attributes, I/O setup
     ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
     
     if ddp:
@@ -232,9 +244,9 @@ if __name__=="__main__":
         else:
             # If the operating system is Linux based, os.name == 'posix'
             init_process_group(backend="nccl")
-        ddp_rank = int(os.environ["RANK"])
-        ddp_local_rank = int(os.environ["LOCAL_RANK"])
-        ddp_world_size = int(os.environ["WORLD_SIZE"])
+        ddp_rank = int(os.environ["RANK"])              # 全局 rank：0~world_size-1
+        ddp_local_rank = int(os.environ["LOCAL_RANK"])  # 本机（节点）上的 GPU 序号, cuda:0...
+        ddp_world_size = int(os.environ["WORLD_SIZE"])  # num_nodes * gpus_per_node
         device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(device)
         master_process = ddp_rank == 0  # this process will do logging, checkpointing etc.
