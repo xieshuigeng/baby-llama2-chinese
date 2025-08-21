@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import time
 import math
 import pickle
@@ -172,26 +172,31 @@ if __name__=="__main__":
     init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
     #
     gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-    batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
+    batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
     # model
-    max_seq_len = 512
-    dim = 512
-    n_layers = 8
+    # max_seq_len = 512
+    # dim = 512
+    # n_layers = 8
+    # n_heads = 8
+    max_seq_len = 1024
+    dim = 1024
+    n_layers = 12
     n_heads = 8
+
     multiple_of = 32
-    dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+    dropout = 0.1 # for pretraining 0 is good, for finetuning try 0.1+
     bias = False # do we use bias inside LayerNorm and Linear layers?
     # adamw optimizer
-    learning_rate = 2e-5 # max learning rate
+    learning_rate = 3e-5 # max learning rate
     weight_decay = 1e-4
     beta1 = 0.9
     beta2 = 0.95
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
     # learning rate decay settings
     decay_lr = True # whether to decay the learning rate
-    warmup_iters = 1000 # how many steps to warm up for
-    lr_decay_iters = 50000 # should be ~= max_iters per Chinchilla
-    min_lr = 1e-6 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+    warmup_iters = 300 # how many steps to warm up for
+    lr_decay_iters = 22000 # should be ~= max_iters per Chinchilla
+    min_lr = 1e-7 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
     # DDP settings
     backend = 'nccl' # 'nccl', 'gloo', etc.
     # system
@@ -270,7 +275,7 @@ if __name__=="__main__":
     df=df.sample(frac=1.0)
     print(df)
     tokenizer=ChatGLMTokenizer(vocab_file='./chatglm_tokenizer/tokenizer.model')
-    train_ds = SFTDataset(df,tokenizer, max_length=512)
+    train_ds = SFTDataset(df,tokenizer, max_length=1024)
     train_loader = torch.utils.data.DataLoader(
         train_ds,
         batch_size=batch_size,
@@ -290,7 +295,7 @@ if __name__=="__main__":
     # )
     #init model
     model=init_model()
-    model.load_state_dict(torch.load('./out/baike_pretrain/epoch_0.pth'))
+    model.load_state_dict(torch.load('./out/218m/pretrain/epoch_0.pth'))
     model.to(device)
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
